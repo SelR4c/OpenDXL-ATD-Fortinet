@@ -1,102 +1,66 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Description: Python script to quarantine a host in the security fabric
+# Date: 07 nov 2019
+# Authors: Charles Prevot at Fortinet Paris
+# Requirements: pip install requests
+
 import requests
-import sys
 import json
 
 requests.packages.urllib3.disable_warnings()
 
+def getError(code: int):
+    if code == 200:
+        return
+    elif code == 401:
+        raise Exception("401 Unauthorized")
+    elif code == 403:
+        raise Exception("403 Forbidden")
+    elif code == 404:
+        raise Exception("404 Not Found")
+    elif code == 500:
+        raise Exception("500 Internal Server Error")
+    else:
+        raise Exception("Unknown Error " + str(code))
 
 class Fortigate(object):
 
-    def __init__(self):
-        self.fgt = "1.1.1.1" #IP or Hostname FortiGate
-        self.token = "xxxxxxxxxxxxxxxxxx" #API token
+    def __init__(self, fgt_ip, port, token, vdom="root", verify=False):
+        self.ip = fgt_ip # IP or Hostname FortiGate
+        self.port = port # Administrative port for https
+        self.token = token # API token
 
-        self.host = sys.argv[1]
-        self.group = "BadIPList" #Address Group Name
-
-        self.url = "https://" + self.fgt
+        self.url = "https://{}:{}".format(self.ip, str(self.port))
         self.headers = {"Authorization": "Bearer " + self.token}
-        self.verify = False
+        self.vdom = vdom
 
-    def get(self, type):
-        if type == 'address':
-            object = self.host
-        elif type == 'addrgrp':
-            object = self.group
+        self.verify = verify
 
-        res = requests.get(self.url + '/api/v2/cmdb/firewall/' + type + "/" + object, headers=self.headers,
-                           verify=self.verify)
+    def add_quarantine(self, quarantine_host):
+        data = {
+            "ip_addresses": [ str(quarantine_host) ],
+            "expiry": 0
+        }
+        res = requests.post(self.url + '/api/v2/monitor/user/banned/add_users',
+            headers=self.headers, data=json.dumps(data), params={"vdom": self.vdom}, verify=self.verify)
         return res
 
-    def add_host(self):
-        data = {'name': self.host, 'type': "ipmask",'subnet': self.host + " 255.255.255.255"}
-        res = requests.post(self.url + '/api/v2/cmdb/firewall/address/', headers=self.headers, data=json.dumps(data),
-                            verify=self.verify)
-        return res
 
-    def add_group(self):
-        data = {'name': "BadIPList", 'member': [{'name': self.host}]}
-        res = requests.post(self.url + '/api/v2/cmdb/firewall/addrgrp/', headers=self.headers, data=json.dumps(data),
-                            verify=self.verify)
-        return res
+def main():
+    fgt = Fortigate("10.200.3.1", 1443, "cjk8f01gs0037j06djjckskkG55GGh")
 
-    def edit_group(self, members):
-        data = {'member': members}
-        res = requests.put(self.url + '/api/v2/cmdb/firewall/addrgrp/'+ self.group + '/', headers=self.headers,
-                           data=json.dumps(data), verify=self.verify)
-        return res
+    try:
+        response = fgt.add_quarantine("192.168.1.10")
+        getError(response.status_code)
+    except Exception as e:
+        print(e.args[1])
+        return 1
+
+    print("Successfully added address")
+    return 0
 
 
 if __name__ == "__main__":
-    fgt = Fortigate()
-    check_host = fgt.get("address")
-
-    if check_host.status_code != 200:
-        print("Address does not exist")
-        add_host = fgt.add_host()
-        if add_host.status_code != 200:
-            print("ERROR: Could not add host to FortiGate")
-            sys.exit(1)
-        print("Successfully added address")
-    elif check_host.status_code == 200:
-        print("Address exist already")
-    else:
-        print("Something went wrong.")
-        sys.exit(1)
-
-    check_group = fgt.get("addrgrp")
-    if check_group.status_code == 200:
-        print("Address Group exist already")
-
-        try:
-            rjson = check_group.json()["results"]
-        except Exception as e:
-            print("Could not decode JSON data in HTTP response " + e)
-            sys.exit(1)
-
-        for line in rjson:
-            members = line["member"]
-        for line in members:
-            if fgt.host in line["name"]:
-                print("Host in group already")
-                sys.exit(1)
-            else:
-                print("Address is not member of this group")
-                members.append({'q_origin_key': fgt.host, 'name': fgt.host})
-                edit_group = fgt.edit_group(members)
-                if edit_group.status_code == 200:
-                    print("Address got added to this group")
-                    sys.exit(1)
-
-    elif check_group.status_code != 200:
-        print("Address Group does not exist")
-        create_group = fgt.add_group()
-        if create_group.status_code != 200:
-            print("ERROR: Could not add group to FortiGate")
-        print("Successfully created address group")
-        sys.exit(1)
-
-    else:
-        print("Something went wrong.")
-        sys.exit(1)
+    main()
