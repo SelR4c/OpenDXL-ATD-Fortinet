@@ -40,10 +40,15 @@ class Fortigate(object):
         self.verify = verify
         self.timeout = timeout
 
-    def add_quarantine(self, quarantine_host):
+    # function add_quarantine()
+    # description: add an IP address to quarantine user in FortiOS. Quarantine user will be shared across security fabric.
+    # parameters:
+    #   - quarantine_host: ip address of the host to quarantine
+    #   - expiry: time to ban in second. 0 = unlimited time
+    def add_quarantine(self, quarantine_host, expiry=0):
         data = {
             "ip_addresses": [ str(quarantine_host) ],
-            "expiry": 0
+            "expiry": expiry
         }
         try:
             res = requests.post(self.url + '/api/v2/monitor/user/banned/add_users',
