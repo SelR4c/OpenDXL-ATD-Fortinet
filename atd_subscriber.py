@@ -28,28 +28,22 @@ with DxlClient(config) as client:
                 query = query[:query.rfind('}')+1]
                 query = json.loads(query)
 
-                try:
-                    # Get Destination IP and push to Fortinet
-                    ips = query['Summary']['Dst IP']
-                    if not ips:
-                        pass
-                    else:
-                        ipv4 = ips
-                        print ipv4
-                        os.system('python forti_push.py ' + ipv4)
-                except: pass
+                # Get Destination IP and push to Fortinet
+                ips = query['Summary']['Dst IP']
+                if ips:
+                    ipv4 = ips
+                    print(ipv4)
+                    os.system('python forti_push.py ' + ipv4)
 
-                try:
-                    # Get IPs and push to Fortinet
-                    for ips in query['Summary']['Ips']:
+                # Get IPs and push to Fortinet
+                for ips in query['Summary']['Ips']:
+                    if ipv4:
                         ipv4 = ips['Ipv4']
-                        print ipv4
-                        if not ipv4: pass
-                        else: os.system('python forti_push.py ' + ipv4)
-                except: pass
+                        print (ipv4)
+                        os.system('python forti_push.py ' + ipv4)
 
             except Exception as e:
-                print e
+                print(e)
 
         @staticmethod
         def worker_thread(req):
