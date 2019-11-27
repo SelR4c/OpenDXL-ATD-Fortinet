@@ -7,8 +7,10 @@
 # Authors: Charles Prevot at Fortinet Paris
 # Requirements: pip install requests
 
-import requests
+import argparse
 import json
+
+import requests
 
 requests.packages.urllib3.disable_warnings()
 
@@ -43,14 +45,14 @@ class Fortigate(object):
     # function add_quarantine()
     # description: add an IP address to quarantine user in FortiOS. Quarantine user will be shared across security fabric.
     # parameters:
-    #   - quarantine_host: ip address of the host to quarantine
+    #   - quarantine_host: list of ip address of the host to quarantine
     #   - expiry: time to ban in second. 0 = unlimited time
-    def add_quarantine(self, quarantine_host, expiry=0):
-        data = {
-            "ip_addresses": [ str(quarantine_host) ],
-            "expiry": expiry
-        }
+    def add_quarantine(self, quarantine_host: list, expiry=0):
         try:
+            data = {
+                "ip_addresses": quarantine_host,
+                "expiry": expiry
+            }
             res = requests.post(self.url + '/api/v2/monitor/user/banned/add_users',
                 headers=self.headers, data=json.dumps(data), params={"vdom": self.vdom}, timeout=self.timeout, verify=self.verify)
         except:
@@ -58,20 +60,27 @@ class Fortigate(object):
 
         return res
 
-
+# Standalone usage, only one ip address
 def main():
-    fgt = Fortigate("x.x.x.x", 443, "token")
+    parser = argparse.ArgumentParser(description='Quarantine a host in the security fabric')
+    parser.add_argument('-i', '--ip', help='FortiGate IP', required=True)
+    parser.add_argument('-t', '--token', help='FortiGate Token', required=True)
+    parser.add_argument('-p', '--port', help='FortiGate administrative port', default=443)
+    parser.add_argument('-q', '--quarantine', help='Host to ban', required=True)
+
+    args = parser.parse_args()
+
+    fgt = Fortigate(str(args.ip), int(args.port), str(args.token))
 
     try:
-        response = fgt.add_quarantine("1.1.1.1")
+        response = fgt.add_quarantine([ str(args.quarantine) ])
         getError(response.status_code)
     except Exception as e:
         print(str(e.args))
         return 1
 
-    print("Successfully added quarantine host")
+    print("Successfully added quarantine host. See https://{fgt_ip}:{port}/ng/user/quarantine".format(fgt_ip=args.ip, port=args.port))
     return 0
-
 
 if __name__ == "__main__":
     main()
